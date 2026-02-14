@@ -1,0 +1,9 @@
+{
+  "name": "Shahjahan Enterprise Portal",
+  "description": "A comprehensive management and customer portal for Shahjahan Enterprise, an authorized dealer of Premier Cement in Koyra Bazar, Khulna. Features include inventory management, construction calculator, and digital ledger (Baki Khata).",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}

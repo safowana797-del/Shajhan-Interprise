@@ -10,13 +10,14 @@ import {
   generateSocialCaption
 } from '../services/geminiService.ts';
 
-// Fixing global Window declaration for aistudio by ensuring identical modifiers (readonly) with existing environment definitions
+// Fixing global Window declaration for aistudio by ensuring identical modifiers with existing environment definitions
 declare global {
   interface AIStudio {
     hasSelectedApiKey: () => Promise<boolean>;
     openSelectKey: () => Promise<void>;
   }
   interface Window {
+    // Added readonly modifier to match the environment's base declaration and fix modifier mismatch error
     readonly aistudio: AIStudio;
   }
 }

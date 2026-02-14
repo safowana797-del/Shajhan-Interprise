@@ -78,6 +78,7 @@ const App: React.FC = () => {
   const [showSplash, setShowSplash] = useState(true);
   const [showHeader, setShowHeader] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const controlHeader = () => {
@@ -113,24 +114,75 @@ const App: React.FC = () => {
                 </div>
              </Link>
 
-             <div className="hidden lg:flex items-center gap-8">
-                {['Home', 'Product', 'Project', 'Calculator', 'Profile'].map((item) => (
-                  <Link 
-                    key={item} 
-                    to={item === 'Home' ? '/' : `/${item.toLowerCase()}`} 
-                    className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900 hover:text-red-600 transition-colors"
-                  >
-                    {item}
-                  </Link>
-                ))}
-                <Link to="/admin" className="bg-slate-950 text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-red-600 transition-all shadow-xl">Admin</Link>
+             {/* Right Aligned Menu */}
+             <div className="hidden lg:flex items-center gap-10 ml-auto">
+                <div className="flex items-center gap-8">
+                  {['Home', 'Product', 'Project', 'Calculator', 'Profile'].map((item) => (
+                    <Link 
+                      key={item} 
+                      to={item === 'Home' ? '/' : `/${item.toLowerCase()}`} 
+                      className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-900 hover:text-red-600 transition-colors relative group"
+                    >
+                      {item}
+                      <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-red-600 transition-all group-hover:w-full"></span>
+                    </Link>
+                  ))}
+                </div>
+                <Link to="/admin" className="bg-slate-950 text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-red-600 transition-all shadow-xl">Admin Panel</Link>
              </div>
 
-             <div className="lg:hidden flex items-center gap-2">
+             <div className="lg:hidden flex items-center gap-3">
                 <a href="tel:+8801711234567" className="w-10 h-10 bg-red-600 text-white rounded-xl flex items-center justify-center shadow-lg active:scale-90 transition-all text-xl">📞</a>
-                <Link to="/admin" className="w-10 h-10 bg-slate-950 text-white rounded-xl flex items-center justify-center shadow-lg active:scale-90 transition-all text-sm">🔐</Link>
+                <button 
+                  onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                  className="w-10 h-10 bg-slate-950 text-white rounded-xl flex flex-col items-center justify-center gap-1.5 shadow-lg active:scale-90 transition-all"
+                >
+                  <span className={`w-5 h-0.5 bg-white transition-all ${isMobileMenuOpen ? 'rotate-45 translate-y-2' : ''}`}></span>
+                  <span className={`w-5 h-0.5 bg-white transition-all ${isMobileMenuOpen ? 'opacity-0' : ''}`}></span>
+                  <span className={`w-5 h-0.5 bg-white transition-all ${isMobileMenuOpen ? '-rotate-45 -translate-y-2' : ''}`}></span>
+                </button>
              </div>
            </nav>
+
+           {/* Mobile Sidebar Overlay */}
+           {isMobileMenuOpen && (
+             <div 
+               className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[600] lg:hidden animate-in fade-in duration-300"
+               onClick={() => setIsMobileMenuOpen(false)}
+             >
+               <div 
+                 className="absolute right-0 top-0 bottom-0 w-[80%] max-w-sm bg-white p-10 animate-in slide-in-from-right duration-500 shadow-2xl flex flex-col"
+                 onClick={e => e.stopPropagation()}
+               >
+                 <div className="flex justify-between items-center mb-16">
+                    <img src={LOGO_URL} alt="Logo" className="w-12 h-12" />
+                    <button onClick={() => setIsMobileMenuOpen(false)} className="text-3xl text-slate-400 hover:text-red-600">✕</button>
+                 </div>
+                 <div className="flex flex-col gap-8">
+                    {['Home', 'Product', 'Project', 'Calculator', 'Profile'].map((item) => (
+                      <Link 
+                        key={item} 
+                        to={item === 'Home' ? '/' : `/${item.toLowerCase()}`} 
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="text-2xl font-black uppercase italic tracking-tighter text-slate-900 hover:text-red-600"
+                      >
+                        {item}
+                      </Link>
+                    ))}
+                    <div className="pt-8 border-t border-slate-100 flex flex-col gap-4">
+                       <Link 
+                        to="/admin" 
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="w-full bg-slate-950 text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest text-center"
+                       >
+                        Admin Login
+                       </Link>
+                       <a href="tel:+8801711234567" className="w-full border-2 border-slate-950 text-slate-950 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest text-center">Contact Us</a>
+                    </div>
+                 </div>
+               </div>
+             </div>
+           )}
         </header>
 
         <main className="flex-grow pb-32 md:pb-0">

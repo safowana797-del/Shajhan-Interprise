@@ -1,24 +1,27 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { InventoryItem, LedgerEntry, ExpenseEntry, ScheduledPost } from '../types.ts';
+import { InventoryItem, LedgerEntry, ExpenseEntry, ScheduledPost } from '../types';
 import { GoogleGenAI, Modality, Type, LiveServerMessage } from "@google/genai";
 import { 
   generateActualVideo, 
   getBusinessOracleAdvice, 
   generateRadioAd, 
-  generateMarketingPoster,
-  generateSocialCaption
-} from '../services/geminiService.ts';
+  generateMarketingPoster
+} from '../services/geminiService';
 
-// Fixing global Window declaration for aistudio by ensuring identical modifiers with existing environment definitions
+declare var process: {
+  env: {
+    API_KEY: string;
+  };
+};
+
 declare global {
   interface AIStudio {
     hasSelectedApiKey: () => Promise<boolean>;
     openSelectKey: () => Promise<void>;
   }
   interface Window {
-    // Added readonly modifier to match the environment's base declaration and fix modifier mismatch error
-    readonly aistudio: AIStudio;
+    aistudio?: AIStudio;
   }
 }
 
@@ -73,6 +76,12 @@ const AdminDashboard: React.FC = () => {
   const [isInvModalOpen, setIsInvModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  
+  // Payment Flow States
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [selectedLedger, setSelectedLedger] = useState<LedgerEntry | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   // Marketing Generation States
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
@@ -116,6 +125,59 @@ const AdminDashboard: React.FC = () => {
     return { sales, baki, exp, profit: sales - exp };
   }, [ledger, expenses]);
 
+  // CSV EXPORT UTILITY
+  const exportToCSV = (data: any[], filename: string) => {
+    if (data.length === 0) {
+      alert("এক্সপোর্ট করার জন্য কোনো ডাটা নেই।");
+      return;
+    }
+    const headers = Object.keys(data[0]).join(',');
+    const rows = data.map(obj => 
+      Object.values(obj).map(val => {
+        const strVal = String(val);
+        return strVal.includes(',') ? `"${strVal.replace(/"/g, '""')}"` : strVal;
+      }).join(',')
+    ).join('\n');
+    
+    const csvContent = `\uFEFF${headers}\n${rows}`; // Added BOM for Excel UTF-8 support
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportInventory = () => {
+    const exportData = inventory.map(item => ({
+      'ID': item.id,
+      'Brand': item.brand,
+      'Type': item.type,
+      'Quantity': item.quantity,
+      'Unit': item.unit,
+      'Price': item.unitPrice,
+      'Last Updated': item.lastUpdated
+    }));
+    exportToCSV(exportData, 'Inventory_Report');
+  };
+
+  const handleExportLedger = () => {
+    const exportData = ledger.map(entry => ({
+      'ID': entry.id,
+      'Client Name': entry.clientName,
+      'Contact': entry.contact,
+      'Total': entry.totalAmount,
+      'Paid': entry.paidAmount,
+      'Baki': entry.remainingAmount,
+      'Status': entry.status,
+      'Date': entry.lastTransactionDate
+    }));
+    exportToCSV(exportData, 'Ledger_Report');
+  };
+
   // INVENTORY ACTIONS
   const handleOpenAddInventory = () => {
     setEditingItem(null);
@@ -150,6 +212,47 @@ const AdminDashboard: React.FC = () => {
     setIsInvModalOpen(false);
   };
 
+  // PAYMENT FLOW ACTIONS
+  const openPaymentModal = (entry: LedgerEntry) => {
+    setSelectedLedger(entry);
+    setPaymentAmount(entry.remainingAmount);
+    setIsPaymentModalOpen(true);
+  };
+
+  const handleProcessPayment = async () => {
+    if (!selectedLedger) return;
+    if (paymentAmount <= 0) {
+      alert("অনুগ্রহ করে সঠিক টাকার পরিমাণ দিন।");
+      return;
+    }
+
+    setIsProcessingPayment(true);
+    
+    // Simulate payment processing delay
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const newPaidAmount = selectedLedger.paidAmount + paymentAmount;
+    const newRemainingAmount = Math.max(0, selectedLedger.totalAmount - newPaidAmount);
+    
+    const updatedEntry: LedgerEntry = {
+      ...selectedLedger,
+      paidAmount: newPaidAmount,
+      remainingAmount: newRemainingAmount,
+      status: newRemainingAmount <= 0 ? 'Paid' : 'Pending',
+      lastTransactionDate: new Date().toLocaleDateString('bn-BD')
+    };
+
+    const updatedLedger = ledger.map(entry => 
+      entry.id === selectedLedger.id ? updatedEntry : entry
+    );
+
+    setLedger(updatedLedger);
+    saveToStorage('ledger', updatedLedger);
+    setIsProcessingPayment(false);
+    setIsPaymentModalOpen(false);
+    setSelectedLedger(null);
+  };
+
   // SCHEDULING ACTIONS
   const handleAddSchedule = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -176,10 +279,9 @@ const AdminDashboard: React.FC = () => {
 
   // GENERATION HANDLERS
   const handleGenerateVideo = async () => {
-    // Check for API key as mandatory for Veo models
-    const hasKey = await window.aistudio.hasSelectedApiKey();
+    const hasKey = await window.aistudio?.hasSelectedApiKey();
     if (!hasKey) {
-      await window.aistudio.openSelectKey();
+      await window.aistudio?.openSelectKey();
     }
 
     setIsGeneratingVideo(true);
@@ -188,9 +290,8 @@ const AdminDashboard: React.FC = () => {
       const url = await generateActualVideo(videoPrompt, null, setVideoProgress);
       setGeneratedVideoUrl(url);
     } catch (e: any) { 
-      // Reset key selection state and prompt user to select a key again if 404 error occurs
       if (e.message?.includes("Requested entity was not found")) {
-        await window.aistudio.openSelectKey();
+        await window.aistudio?.openSelectKey();
       }
       alert("ভিডিও এরর: " + (e.message || "Unknown error")); 
     }
@@ -284,6 +385,77 @@ const AdminDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* PAYMENT MODAL */}
+      {isPaymentModalOpen && selectedLedger && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl">
+           <div className="bg-slate-900 border border-white/10 w-full max-w-lg rounded-[50px] p-10 shadow-[0_50px_100px_-20px_rgba(237,28,36,0.2)] animate-in zoom-in-95 duration-500 overflow-hidden relative">
+              {isProcessingPayment && (
+                <div className="absolute inset-0 z-50 bg-slate-900/95 flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-300">
+                   <div className="w-20 h-20 border-4 border-red-600/20 border-t-red-600 rounded-full animate-spin"></div>
+                   <div className="text-center space-y-2">
+                     <p className="text-xl font-black italic uppercase tracking-widest text-white">পেমেন্ট প্রসেস হচ্ছে...</p>
+                     <p className="text-[10px] font-bold text-slate-500 animate-pulse">অনুগ্রহ করে অপেক্ষা করুন</p>
+                   </div>
+                </div>
+              )}
+
+              <div className="flex justify-between items-start mb-10">
+                <div className="space-y-2">
+                  <p className="text-red-600 text-[10px] font-black uppercase tracking-[0.4em]">Payment Collection</p>
+                  <h2 className="text-3xl font-black uppercase italic text-white tracking-tighter">টাকা গ্রহণ</h2>
+                </div>
+                <button onClick={() => setIsPaymentModalOpen(false)} className="text-slate-500 hover:text-white transition-colors text-2xl">✕</button>
+              </div>
+
+              <div className="space-y-8">
+                 <div className="p-6 bg-white/5 rounded-3xl border border-white/10 flex justify-between items-center">
+                    <div>
+                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">গ্রাহকের নাম</p>
+                      <p className="text-xl font-black italic text-white">{selectedLedger.clientName}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">মোট বাকি</p>
+                      <p className="text-2xl font-black italic text-red-500">৳{selectedLedger.remainingAmount.toLocaleString()}</p>
+                    </div>
+                 </div>
+
+                 <div className="space-y-4">
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] px-2 italic">জমার পরিমাণ (৳)</label>
+                    <input 
+                      type="number" 
+                      className="w-full p-8 bg-slate-950 border border-white/5 rounded-[30px] font-black text-4xl text-center text-white outline-none focus:border-red-600 transition-all shadow-inner"
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                      max={selectedLedger.remainingAmount}
+                    />
+                 </div>
+
+                 <div className="grid grid-cols-2 gap-4">
+                    <button 
+                      onClick={() => setPaymentAmount(selectedLedger.remainingAmount)}
+                      className="py-4 bg-white/5 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+                    >
+                      পুরোটা (Full)
+                    </button>
+                    <button 
+                      onClick={() => setPaymentAmount(selectedLedger.remainingAmount / 2)}
+                      className="py-4 bg-white/5 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+                    >
+                      অর্ধেক (Half)
+                    </button>
+                 </div>
+
+                 <button 
+                    onClick={handleProcessPayment}
+                    className="w-full bg-red-600 text-white py-8 rounded-[30px] font-black uppercase text-[12px] tracking-[0.4em] shadow-2xl hover:bg-red-500 transition-all active:scale-95 mt-4"
+                 >
+                    পেমেন্ট কনফার্ম করুন ➔
+                 </button>
+              </div>
+           </div>
+        </div>
+      )}
+
       {/* SCHEDULING MODAL */}
       {isScheduleModalOpen && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
@@ -367,7 +539,15 @@ const AdminDashboard: React.FC = () => {
           <div className="space-y-10 animate-in slide-in-from-bottom-8">
              <div className="flex justify-between items-center">
                 <h2 className="text-4xl font-black uppercase italic tracking-tighter text-white">স্টক রিপোর্ট</h2>
-                <button onClick={handleOpenAddInventory} className="bg-white text-slate-950 px-10 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest">যোগ করুন +</button>
+                <div className="flex gap-4">
+                  <button 
+                    onClick={handleExportInventory}
+                    className="bg-green-600 text-white px-8 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-green-600/20 hover:bg-green-500 transition-all flex items-center gap-2"
+                  >
+                    Export CSV ⬇️
+                  </button>
+                  <button onClick={handleOpenAddInventory} className="bg-white text-slate-950 px-10 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest">যোগ করুন +</button>
+                </div>
              </div>
              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {inventory.map(item => (
@@ -383,6 +563,71 @@ const AdminDashboard: React.FC = () => {
                       </div>
                    </div>
                 ))}
+             </div>
+          </div>
+        )}
+
+        {activeTab === 'accounts' && (
+          <div className="space-y-10 animate-in slide-in-from-bottom-8">
+             <div className="flex justify-between items-center">
+                <h2 className="text-4xl font-black uppercase italic tracking-tighter text-white">লেজার ও হিসাব</h2>
+                <button 
+                  onClick={handleExportLedger}
+                  className="bg-green-600 text-white px-8 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-green-600/20 hover:bg-green-500 transition-all flex items-center gap-2"
+                >
+                  Export Data ⬇️
+                </button>
+             </div>
+             
+             <div className="bg-slate-900/30 border border-white/5 rounded-[40px] overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-950/50 text-[10px] font-black uppercase text-slate-500 tracking-widest">
+                      <tr>
+                        <th className="p-8">ক্লাইন্ট নাম</th>
+                        <th className="p-8">মোট টাকা</th>
+                        <th className="p-8">পরিশোধিত</th>
+                        <th className="p-8">বাকি (পাওনা)</th>
+                        <th className="p-8">স্ট্যাটাস</th>
+                        <th className="p-8">অ্যাকশন</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-sm font-bold text-slate-300">
+                      {ledger.length > 0 ? ledger.map(entry => (
+                        <tr key={entry.id} className="border-t border-white/5 hover:bg-white/5 transition-colors">
+                          <td className="p-8">
+                             <p className="text-white italic">{entry.clientName}</p>
+                             <p className="text-[10px] text-slate-500">{entry.contact}</p>
+                          </td>
+                          <td className="p-8">৳{entry.totalAmount.toLocaleString()}</td>
+                          <td className="p-8 text-green-500">৳{entry.paidAmount.toLocaleString()}</td>
+                          <td className="p-8 text-red-500 font-black">৳{entry.remainingAmount.toLocaleString()}</td>
+                          <td className="p-8">
+                             <span className={`px-4 py-1.5 rounded-full text-[8px] font-black uppercase ${entry.status === 'Paid' ? 'bg-green-500/10 text-green-500' : entry.status === 'Overdue' ? 'bg-red-500 text-white' : 'bg-red-500/10 text-red-500'}`}>
+                               {entry.status}
+                             </span>
+                          </td>
+                          <td className="p-8">
+                             {entry.remainingAmount > 0 ? (
+                               <button 
+                                 onClick={() => openPaymentModal(entry)}
+                                 className="bg-red-600 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-red-600/20 hover:scale-105 transition-all"
+                               >
+                                 💸 পেমেন্ট
+                               </button>
+                             ) : (
+                               <span className="text-[10px] text-green-500 font-black uppercase italic">Paid ✅</span>
+                             )}
+                          </td>
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td colSpan={6} className="p-20 text-center italic text-slate-600">কোন হিসাব পাওয়া যায়নি</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
              </div>
           </div>
         )}
@@ -479,7 +724,6 @@ const AdminDashboard: React.FC = () => {
         {/* SETTINGS TAB WITH LAUNCH GUIDE */}
         {activeTab === 'settings' && (
            <div className="max-w-3xl mx-auto space-y-12 animate-in fade-in">
-              {/* Hosting Guide Card */}
               <div className="bg-gradient-to-br from-slate-900 to-red-950/20 p-10 rounded-[50px] border border-red-600/10 space-y-8 relative overflow-hidden shadow-2xl">
                  <div className="absolute top-0 right-0 w-40 h-40 bg-red-600/5 blur-[60px] -z-10"></div>
                  <div className="flex items-center gap-5">
@@ -512,7 +756,7 @@ const AdminDashboard: React.FC = () => {
 
               <div className="bg-slate-900/40 p-10 rounded-[50px] border border-white/5 space-y-8">
                  <h2 className="text-3xl font-black uppercase italic text-white">প্যানেল সেটিং</h2>
-                 <button onClick={async () => await window.aistudio.openSelectKey()} className="w-full bg-blue-600 text-white py-6 rounded-2xl font-black uppercase text-[10px] tracking-widest">API কী পরিবর্তন করুন</button>
+                 <button onClick={async () => await window.aistudio?.openSelectKey()} className="w-full bg-blue-600 text-white py-6 rounded-2xl font-black uppercase text-[10px] tracking-widest">API কী পরিবর্তন করুন</button>
                  <button onClick={() => window.location.reload()} className="w-full bg-slate-800 text-white py-6 rounded-2xl font-black uppercase text-[10px] tracking-widest">রিস্টার্ট সিস্টেম</button>
                  <button onClick={() => setIsAuthenticated(false)} className="w-full bg-red-600/10 text-red-500 py-6 rounded-2xl font-black uppercase text-[10px] border border-red-600/20 tracking-widest">লগ আউট</button>
               </div>
@@ -521,10 +765,11 @@ const AdminDashboard: React.FC = () => {
 
       </main>
 
-      <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] md:w-[600px] bg-slate-900/80 backdrop-blur-3xl border border-white/10 px-8 py-5 flex justify-around items-center z-[200] rounded-[40px] shadow-2xl">
+      <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] md:w-[700px] bg-slate-900/80 backdrop-blur-3xl border border-white/10 px-6 py-5 flex justify-around items-center z-[200] rounded-[40px] shadow-2xl">
         {[
           { id: 'overview', icon: '📊', label: 'হোম' },
           { id: 'inventory', icon: '📦', label: 'স্টক' },
+          { id: 'accounts', icon: '🧾', label: 'হিসাব' },
           { id: 'marketing', icon: '🎨', label: 'প্রচার' },
           { id: 'settings', icon: '⚙️', label: 'সেটিং' }
         ].map(item => (

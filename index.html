@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="bn">
 <head>
@@ -17,30 +16,99 @@
     <style>
         :root {
             --brand-red: #ED1C24;
-            --brand-dark: #1A1A1A;
+            --brand-dark: #060B18;
+            --glass-bg: rgba(255, 255, 255, 0.7);
         }
+        
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+
         body { 
           font-family: 'Poppins', 'Hind Siliguri', sans-serif; 
           scroll-behavior: smooth;
           -webkit-tap-highlight-color: transparent;
-          background-color: #FFFFFF;
+          background-color: #F8FAFC;
           color: #1A1A1A;
           overflow-x: hidden;
+          min-height: 100vh;
         }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        @keyframes reveal {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
+
+        .mesh-bg {
+          position: fixed;
+          top: 0; left: 0; width: 100%; height: 100%;
+          z-index: -1;
+          background-color: #f8fafc;
+          background-image: 
+            radial-gradient(at 0% 0%, rgba(237, 28, 36, 0.05) 0px, transparent 50%),
+            radial-gradient(at 100% 0%, rgba(6, 11, 24, 0.03) 0px, transparent 50%);
         }
-        .animate-reveal { animation: reveal 0.8s ease-out forwards; }
-        @keyframes loading {
-          0% { width: 0%; transform: translateX(-100%); }
-          50% { width: 50%; transform: translateX(0%); }
-          100% { width: 100%; transform: translateX(100%); }
+
+        .noise::before {
+          content: "";
+          position: fixed;
+          top: 0; left: 0; width: 100%; height: 100%;
+          background-image: url("https://www.transparenttextures.com/patterns/p6.png");
+          opacity: 0.04;
+          pointer-events: none;
+          z-index: 1000;
         }
-        .animate-loading {
-          animation: loading 2s infinite ease-in-out;
+
+        /* Text Shimmer Animation */
+        @keyframes shimmer-move {
+          0% { background-position: -200% center; }
+          100% { background-position: 200% center; }
+        }
+
+        .premium-shimmer {
+          background: linear-gradient(
+            90deg, 
+            rgba(255,255,255,1) 0%, 
+            rgba(255,255,255,0.4) 25%, 
+            rgba(255,255,255,1) 50%, 
+            rgba(255,255,255,0.4) 75%, 
+            rgba(255,255,255,1) 100%
+          );
+          background-size: 200% auto;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: shimmer-move 6s infinite linear;
+        }
+
+        .red-shimmer {
+          background: linear-gradient(
+            90deg, 
+            #ED1C24 0%, 
+            #ff7675 25%, 
+            #ED1C24 50%, 
+            #ff7675 75%, 
+            #ED1C24 100%
+          );
+          background-size: 200% auto;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: shimmer-move 4s infinite linear;
+        }
+
+        /* Staggered Entrance Animation */
+        @keyframes revealUp {
+          from { 
+            opacity: 0; 
+            transform: translateY(40px) skewY(5deg); 
+            filter: blur(10px);
+          }
+          to { 
+            opacity: 1; 
+            transform: translateY(0) skewY(0); 
+            filter: blur(0);
+          }
+        }
+
+        .animate-reveal-text {
+          animation: revealUp 1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+          display: inline-block;
         }
     </style>
 <script type="importmap">
@@ -57,7 +125,8 @@
 }
 </script>
 </head>
-<body class="selection:bg-red-600 selection:text-white">
+<body class="selection:bg-red-600 selection:text-white noise">
+    <div class="mesh-bg"></div>
     <div id="root"></div>
     <script type="module" src="./index.tsx"></script>
 </body>
